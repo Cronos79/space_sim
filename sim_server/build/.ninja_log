@@ -1,3 +1,12 @@
 # ninja log v5
-1	2459	1769968100063042674	CMakeFiles/sim_server.dir/src/main.cpp.o	92ba33df8cefba0a
-2460	2583	1769968100185054748	sim_server	7bca3b7723b3245b
+3	2734	1769971660102045227	CMakeFiles/sim_server.dir/src/db.cpp.o	d07af05839a9e65b
+3	2032	1769971659401985345	CMakeFiles/sim_server.dir/src/main.cpp.o	5ecf91e60d8dfaf
+2734	2866	1769971660235056604	sim_server	16aa4b740ba391b4
+2	68	1769972691178735999	build.ninja	9fe2385aa171cdf
+4	2289	1769972693477947554	CMakeFiles/sim_server.dir/src/main.cpp.o	5ecf91e60d8dfaf
+5	3940	1769972695130099536	CMakeFiles/sim_server.dir/src/db.cpp.o	d07af05839a9e65b
+2289	4384	1769972695576140562	CMakeFiles/sim_server.dir/src/auth.cpp.o	1b5039955df17b16
+4384	4538	1769972695730154727	sim_server	47272241602c5aa5
+3	2297	1769973416840559694	CMakeFiles/sim_server.dir/src/main.cpp.o	5ecf91e60d8dfaf
+3	2970	1769973417515618855	CMakeFiles/sim_server.dir/src/db.cpp.o	d07af05839a9e65b
+2970	3119	1769973417663631827	sim_server	47272241602c5aa5

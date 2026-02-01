@@ -39,3 +39,16 @@
 
 # debug information files
 *.dwo
+
+# build artifacts
+/build
+**/build/
+
+# runtime junk
+cookies.txt
+*.db
+*.db-journal
+
+# editor junk
+.vscode/
+*.swp
