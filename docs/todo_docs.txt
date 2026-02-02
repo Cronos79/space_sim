@@ -1,0 +1,5 @@
+station_philosophy.md — prevents station upgrades from becoming a clicker
+
+trade_and_logistics.md — makes trade routes matter more than raw income
+
+time_and_simulation.md — locks how ticks affect wars, industry, and absence
