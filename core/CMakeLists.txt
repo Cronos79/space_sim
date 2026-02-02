@@ -5,6 +5,7 @@ add_library(space_core STATIC
 
     src/commands/commands.cpp
     src/commands/cmd_universe.cpp
+    src/commands/cmd_misc.cpp
 
     src/universe/gate_network.cpp
     src/universe/universe.cpp

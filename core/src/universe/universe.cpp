@@ -15,4 +15,11 @@ std::optional<SolarSystem> Universe::get_system(SystemId id) const {
     return it->second;
 }
 
+std::optional<SystemId> Universe::find_system_by_name(const std::string& name) const {
+    for (const auto& [id, sys] : systems_) {
+        if (sys.name == name) return id;
+    }
+    return std::nullopt;
+}
+
 } // namespace universe

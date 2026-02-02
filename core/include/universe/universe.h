@@ -14,6 +14,7 @@ public:
     const std::unordered_map<SystemId, SolarSystem>& systems() const { return systems_; }
     GateNetwork& gates() { return gates_; }
     const GateNetwork& gates() const { return gates_; }
+    std::optional<SystemId> find_system_by_name(const std::string& name) const;
 
 private:
     std::unordered_map<SystemId, SolarSystem> systems_;

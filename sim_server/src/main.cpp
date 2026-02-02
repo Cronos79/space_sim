@@ -6,9 +6,15 @@
 
 #include "dev_universe.h"
 #include "internal_cmd_api.h"
+#include "universe_generator.h"
 
 #include "commands/commands.h"
 #include "commands/cmd_universe.h"
+#include "commands/cmd_misc.h"
+
+#ifndef SPACE_SIM_INTERNAL_KEY_DEFAULT
+#define SPACE_SIM_INTERNAL_KEY_DEFAULT "dev123"
+#endif
 
 static std::string env_str(const char* k, const char* fallback) {
     if (const char* v = std::getenv(k)) return std::string(v);
@@ -19,14 +25,15 @@ int main() {
     std::cout << "sim_server starting...\n";
 
     const std::string internal_key =
-        env_str("SPACE_SIM_INTERNAL_KEY", "dev123");
+        env_str("SPACE_SIM_INTERNAL_KEY", SPACE_SIM_INTERNAL_KEY_DEFAULT);
 
-    // Build dev universe
-    universe::Universe u = sim::build_dev_universe();
+    universe::Universe u = sim::generate_universe(500, 1337);
 
     // Router + commands
     commands::Router router;
     commands::register_universe_commands(router, u);
+    commands::register_misc_commands(router, u);
+
 
     // Internal API server
     httplib::Server server;

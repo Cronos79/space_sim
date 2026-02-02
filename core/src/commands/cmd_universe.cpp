@@ -66,7 +66,48 @@ void register_universe_commands(Router& r, const universe::Universe& u) {
         return {true, out.str(), "", {}};
     });
 
-    // You can add "system" later once SolarSystem has more fields you care about.
+    r.add("system", [&u](const Context&, const Command& cmd) -> Result {
+        if (cmd.args.size() != 1) {
+            return {false, "Usage: system <system>", "usage", {}};
+        }
+
+        auto sid = u.find_system_by_name(cmd.args[0]);
+        if (!sid) return {false, "Unknown system: " + cmd.args[0], "unknown_system", {}};
+
+        auto sys = u.get_system(*sid);
+        if (!sys) return {false, "System missing (internal error).", "internal", {}};
+
+        auto type_to_str = [](universe::SystemType t) {
+            switch (t) {
+                case universe::SystemType::Core: return "core";
+                case universe::SystemType::Frontier: return "frontier";
+                case universe::SystemType::Dead: return "dead";
+            }
+            return "unknown";
+        };
+
+        auto sec_to_str = [](universe::SecurityLevel s) {
+            switch (s) {
+                case universe::SecurityLevel::High: return "high";
+                case universe::SecurityLevel::Medium: return "medium";
+                case universe::SecurityLevel::Low: return "low";
+                case universe::SecurityLevel::None: return "none";
+            }
+            return "unknown";
+        };
+
+        std::ostringstream out;
+        out << "System: " << sys->name << " (#" << sys->id << ")\n";
+        out << "Type: " << type_to_str(sys->type) << "\n";
+        out << "Security: " << sec_to_str(sys->security) << "\n";
+        out << "OwnerFaction: " << sys->owner_faction_id << "\n";
+        out << "Gates:\n";
+        for (auto n : u.gates().neighbors(*sid)) {
+            out << "  - " << sys_name(u, n) << "\n";
+        }
+
+        return {true, out.str(), "", {}};
+    });
 }
 
 } // namespace commands
