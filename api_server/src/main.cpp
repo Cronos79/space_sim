@@ -333,6 +333,40 @@ server.Post("/admin/cleanup_sessions", [](const httplib::Request&, httplib::Resp
         json_reply(res, 200, out);
     });
 
+    server.Post("/cmd", [&](const httplib::Request& req, httplib::Response& res) {
+        auto uid = require_login(req, res);
+        if (!uid) return;
+
+        json in = json::parse(req.body, nullptr, false);
+        if (in.is_discarded() || !in.contains("cmd") || !in["cmd"].is_string()) {
+            json_reply(res, 400, {{"ok", false}, {"error", "bad_request"}});
+            return;
+        }
+
+        std::string internal_key = "dev-internal-key-change-me";
+        if (const char* env = std::getenv("SPACE_SIM_INTERNAL_KEY"); env) {
+            internal_key = env;
+        }
+
+        httplib::Client cli("127.0.0.1", 8090);
+        cli.set_read_timeout(5, 0);
+        cli.set_write_timeout(5, 0);
+
+        json forward;
+        forward["user_id"] = *uid;
+        forward["cmd"] = in["cmd"].get<std::string>();
+
+        httplib::Headers headers = {{"X-Internal-Key", internal_key}};
+
+        auto r = cli.Post("/cmd", headers, forward.dump(), "application/json");
+        if (!r) {
+            json_reply(res, 502, {{"ok", false}, {"error", "sim_unreachable"}});
+            return;
+        }
+
+        res.status = r->status;
+        res.set_content(r->body, "application/json");
+    });
 
     std::cout << "API server listening on 0.0.0.0:8080\n";
     server.listen("0.0.0.0", 8080);
