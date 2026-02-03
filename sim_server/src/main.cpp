@@ -2,7 +2,6 @@
 #include <iostream>
 #include <string>
 #include <thread>
-#include <atomic>
 #include <chrono>
 
 #include "httplib.h"
@@ -11,7 +10,6 @@
 #include "cmd_time.h"
 #include "cmd_time_utils.h"
 
-#include "dev_universe.h"
 #include "internal_cmd_api.h"
 #include "universe_generator.h"
 
@@ -34,7 +32,7 @@ int main() {
     const std::string internal_key =
         env_str("SPACE_SIM_INTERNAL_KEY", SPACE_SIM_INTERNAL_KEY_DEFAULT);
 
-    // Game time
+    // Game time config
     time_sim::GameTimeConfig tcfg;
     tcfg.start_year = 2350;
     tcfg.start_month = 1;
@@ -44,17 +42,18 @@ int main() {
 
     sim::GameClock clock(tcfg);
 
-    // Create the universe
+    // Universe
     universe::Universe u = sim::generate_universe(500, 1337);
 
-    // Router + commands
+    // Commands
     commands::Router router;
     commands::register_universe_commands(router, u);
     commands::register_misc_commands(router, u);
     sim_cmd::register_time_commands(router, clock);
     sim_cmd::register_time_utils(router, clock);
 
-    std::thread([&]{ 
+    // Tick thread (dev-simple; we’ll add clean shutdown later)
+    std::thread([&] {
         while (true) {
             clock.update();
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -67,5 +66,6 @@ int main() {
 
     std::cout << "sim_server listening on 127.0.0.1:8090\n";
     server.listen("127.0.0.1", 8090);
+
     return 0;
 }

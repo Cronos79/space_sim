@@ -333,6 +333,191 @@ server.Post("/admin/cleanup_sessions", [](const httplib::Request&, httplib::Resp
         json_reply(res, 200, out);
     });
 
+    // -------------------------
+// /api/* aliases (for nginx + frontend)
+// Keeps old routes working too.
+// -------------------------
+
+server.Get("/api/health", [](const httplib::Request&, httplib::Response& res) {
+    json_reply(res, 200, {{"ok", true}});
+});
+
+// Alias /api/me -> /me
+server.Get("/api/me", [](const httplib::Request& req, httplib::Response& res) {
+    // Same body as /me
+    auto uid = require_login(req, res);
+    if (!uid) return;
+    json_reply(res, 200, {{"ok", true}, {"user_id", *uid}});
+});
+
+// Alias /api/whoami -> /whoami
+server.Get("/api/whoami", [](const httplib::Request& req, httplib::Response& res) {
+    // Same body as /whoami
+    auto uid = require_login(req, res);
+    if (!uid) return;
+
+    sqlite3* conn = open_db_ready();
+    if (!conn) {
+        json_reply(res, 500, {{"ok", false}, {"error", "db_init_failed"}});
+        return;
+    }
+
+    auto prof = db::get_user_profile(conn, *uid);
+    db::close(conn);
+
+    if (!prof) {
+        json_reply(res, 404, {{"ok", false}, {"error", "user_not_found"}});
+        return;
+    }
+
+    json out;
+    out["ok"] = true;
+    out["user"] = {{"id", prof->id}, {"username", prof->username}, {"email", prof->email}};
+    json_reply(res, 200, out);
+});
+
+// Alias /api/register -> /register
+server.Post("/api/register", [&pepper](const httplib::Request& req, httplib::Response& res) {
+    // Reuse exact logic from /register by calling same code inline:
+    // (This is a minimal duplication approach.)
+    json in;
+    try { in = json::parse(req.body); }
+    catch (...) { json_reply(res, 400, {{"ok", false}, {"error", "bad_request"}}); return; }
+
+    auto get_str = [&](const char* key) -> std::string {
+        if (!in.contains(key) || !in[key].is_string()) return {};
+        return in[key].get<std::string>();
+    };
+
+    const std::string username = get_str("username");
+    const std::string email    = get_str("email");
+    const std::string password = get_str("password");
+    if (username.empty() || email.empty() || password.empty()) {
+        json_reply(res, 400, {{"ok", false}, {"error", "bad_request"}});
+        return;
+    }
+
+    sqlite3* conn = open_db_ready();
+    if (!conn) { json_reply(res, 500, {{"ok", false}, {"error", "db_init_failed"}}); return; }
+
+    const bool created = db::create_user_with_password(conn, username, email, password, pepper);
+    db::close(conn);
+
+    if (!created) { json_reply(res, 409, {{"ok", false}, {"error", "username_or_email_taken"}}); return; }
+    json_reply(res, 200, {{"ok", true}});
+});
+
+// Alias /api/login -> /login
+server.Post("/api/login", [&pepper](const httplib::Request& req, httplib::Response& res) {
+    // Copy of /login logic (same as your existing handler)
+    json in;
+    try { in = json::parse(req.body); }
+    catch (...) { json_reply(res, 400, {{"ok", false}, {"error", "bad_request"}}); return; }
+
+    auto get_str = [&](const char* key) -> std::string {
+        if (!in.contains(key) || !in[key].is_string()) return {};
+        return in[key].get<std::string>();
+    };
+
+    const std::string user_or_email = get_str("user_or_email");
+    const std::string password      = get_str("password");
+    if (user_or_email.empty() || password.empty()) {
+        json_reply(res, 400, {{"ok", false}, {"error", "bad_request"}});
+        return;
+    }
+
+    sqlite3* conn = open_db_ready();
+    if (!conn) { json_reply(res, 500, {{"ok", false}, {"error", "db_init_failed"}}); return; }
+
+    auto row = db::get_user_auth(conn, user_or_email);
+    if (!row || row->is_active == 0) {
+        db::close(conn);
+        json_reply(res, 401, {{"ok", false}, {"error", "invalid_credentials"}});
+        return;
+    }
+
+    if (!auth::verify_password(row->pass_hash, password, pepper)) {
+        db::close(conn);
+        json_reply(res, 401, {{"ok", false}, {"error", "invalid_credentials"}});
+        return;
+    }
+
+    db::update_last_login(conn, row->id);
+
+    constexpr int ttl_seconds = 7 * 24 * 60 * 60;
+    auto token = session::create(conn, row->id, ttl_seconds);
+    if (!token) {
+        db::close(conn);
+        json_reply(res, 500, {{"ok", false}, {"error", "session_create_failed"}});
+        return;
+    }
+
+    session::touch(conn, *token);
+    db::close(conn);
+
+    const std::string set_cookie =
+        "sid=" + *token +
+        "; Path=/; Max-Age=" + std::to_string(ttl_seconds) +
+        "; HttpOnly; SameSite=Lax";
+    res.set_header("Set-Cookie", set_cookie);
+
+    json_reply(res, 200, {{"ok", true}, {"user_id", row->id}});
+});
+
+// Alias /api/logout -> /logout
+server.Post("/api/logout", [](const httplib::Request& req, httplib::Response& res) {
+    const std::string sid = get_cookie_value(req, "sid");
+    if (!sid.empty()) {
+        sqlite3* conn = open_db_ready();
+        if (conn) { session::remove(conn, sid); db::close(conn); }
+    }
+    res.set_header("Set-Cookie", "sid=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
+    json_reply(res, 200, {{"ok", true}});
+});
+
+// NEW: /api/cmd (frontend-friendly)
+// Accepts either {"line":"time"} OR {"cmd":"time"}.
+server.Post("/api/cmd", [&](const httplib::Request& req, httplib::Response& res) {
+    auto uid = require_login(req, res);
+    if (!uid) return;
+
+    json in = json::parse(req.body, nullptr, false);
+    if (in.is_discarded()) {
+        json_reply(res, 400, {{"ok", false}, {"error", "bad_request"}});
+        return;
+    }
+
+    std::string cmd;
+    if (in.contains("line") && in["line"].is_string()) cmd = in["line"].get<std::string>();
+    else if (in.contains("cmd") && in["cmd"].is_string()) cmd = in["cmd"].get<std::string>();
+
+    if (cmd.empty()) {
+        json_reply(res, 400, {{"ok", false}, {"error", "bad_request"}, {"text", "Missing field: line/cmd"}});
+        return;
+    }
+
+    std::string internal_key = "dev-internal-key-change-me";
+    if (const char* env = std::getenv("SPACE_SIM_INTERNAL_KEY"); env) internal_key = env;
+
+    httplib::Client cli("127.0.0.1", 8090);
+    cli.set_read_timeout(5, 0);
+    cli.set_write_timeout(5, 0);
+
+    json forward;
+    forward["user_id"] = *uid;
+    forward["cmd"] = cmd;
+
+    httplib::Headers headers = {{"X-Internal-Key", internal_key}};
+    auto r = cli.Post("/cmd", headers, forward.dump(), "application/json");
+    if (!r) {
+        json_reply(res, 502, {{"ok", false}, {"error", "sim_unreachable"}});
+        return;
+    }
+
+    res.status = r->status;
+    res.set_content(r->body, "application/json");
+});
+
     server.Post("/cmd", [&](const httplib::Request& req, httplib::Response& res) {
         auto uid = require_login(req, res);
         if (!uid) return;

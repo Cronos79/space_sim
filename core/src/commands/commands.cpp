@@ -14,14 +14,20 @@ static std::string trim(const std::string& s) {
 }
 
 std::string Router::normalize_verb(std::string v) {
-    std::transform(v.begin(), v.end(), v.begin(), [](unsigned char c){ return (char)std::tolower(c); });
+    std::transform(v.begin(), v.end(), v.begin(),
+        [](unsigned char c){ return (char)std::tolower(c); });
     return v;
 }
 
-bool Router::add(std::string verb, Handler handler) {
+bool Router::add(std::string verb, Handler handler, Access access) {
     verb = normalize_verb(std::move(verb));
     if (verb.empty() || !handler) return false;
-    return handlers_.emplace(std::move(verb), std::move(handler)).second;
+
+    Entry e;
+    e.handler = std::move(handler);
+    e.access = access;
+
+    return handlers_.emplace(std::move(verb), std::move(e)).second;
 }
 
 std::optional<Command> Router::parse_line(const std::string& line) {
@@ -42,9 +48,7 @@ std::optional<Command> Router::parse_line(const std::string& line) {
 
 Result Router::execute_line(const Context& ctx, const std::string& line) const {
     auto parsed = parse_line(line);
-    if (!parsed) {
-        return Result{false, "Empty command.", "empty_command", {}};
-    }
+    if (!parsed) return Result{false, "Empty command.", "empty_command", {}};
     return execute(ctx, *parsed);
 }
 
@@ -57,7 +61,13 @@ Result Router::execute(const Context& ctx, const Command& cmd) const {
         r.text = "Unknown command: " + cmd.verb;
         return r;
     }
-    return it->second(ctx, cmd);
+    return it->second.handler(ctx, cmd);
+}
+
+std::optional<Access> Router::access_for(const std::string& verb) const {
+    auto it = handlers_.find(normalize_verb(verb));
+    if (it == handlers_.end()) return std::nullopt;
+    return it->second.access;
 }
 
 } // namespace commands
