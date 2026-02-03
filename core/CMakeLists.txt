@@ -3,6 +3,9 @@ add_library(space_core STATIC
     src/auth.cpp
     src/session.cpp
 
+    src/time/game_time.cpp
+    src/time/duration.cpp
+
     src/commands/commands.cpp
     src/commands/cmd_universe.cpp
     src/commands/cmd_misc.cpp

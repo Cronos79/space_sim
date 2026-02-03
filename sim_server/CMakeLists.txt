@@ -3,6 +3,8 @@ add_executable(sim_server
     src/dev_universe.cpp
     src/internal_cmd_api.cpp
     src/universe_generator.cpp
+    src/cmd_time.cpp
+    src/cmd_time_utils.cpp
 )
 target_link_libraries(sim_server PRIVATE space_core)
 target_include_directories(sim_server PRIVATE

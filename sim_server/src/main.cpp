@@ -1,8 +1,15 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <thread>
+#include <atomic>
+#include <chrono>
 
 #include "httplib.h"
+
+#include "game_clock.h"
+#include "cmd_time.h"
+#include "cmd_time_utils.h"
 
 #include "dev_universe.h"
 #include "internal_cmd_api.h"
@@ -27,13 +34,32 @@ int main() {
     const std::string internal_key =
         env_str("SPACE_SIM_INTERNAL_KEY", SPACE_SIM_INTERNAL_KEY_DEFAULT);
 
+    // Game time
+    time_sim::GameTimeConfig tcfg;
+    tcfg.start_year = 2350;
+    tcfg.start_month = 1;
+    tcfg.start_day = 1;
+    tcfg.game_seconds_per_real_second = 36.0;
+    tcfg.tick_step_game_seconds = 600;
+
+    sim::GameClock clock(tcfg);
+
+    // Create the universe
     universe::Universe u = sim::generate_universe(500, 1337);
 
     // Router + commands
     commands::Router router;
     commands::register_universe_commands(router, u);
     commands::register_misc_commands(router, u);
+    sim_cmd::register_time_commands(router, clock);
+    sim_cmd::register_time_utils(router, clock);
 
+    std::thread([&]{ 
+        while (true) {
+            clock.update();
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+    }).detach();
 
     // Internal API server
     httplib::Server server;
